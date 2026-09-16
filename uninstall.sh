@@ -8,6 +8,7 @@ fi
 
 BIN_DEST="/usr/local/libexec/chargectl"
 PLIST_DEST="/Library/LaunchDaemons/com.emchandra.chargescheduler.plist"
+TOGGLE_DEST="/usr/local/bin/toggle-scheduler.sh"
 
 # Always leave the machine able to charge before removing the scheduler.
 if [ -x "$BIN_DEST" ]; then
@@ -15,6 +16,6 @@ if [ -x "$BIN_DEST" ]; then
 fi
 
 launchctl bootout system "$PLIST_DEST" 2>/dev/null || true
-rm -f "$PLIST_DEST" "$BIN_DEST"
+rm -f "$PLIST_DEST" "$BIN_DEST" "$TOGGLE_DEST"
 
 echo "Uninstalled. Charging left enabled."
