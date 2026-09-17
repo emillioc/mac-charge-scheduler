@@ -51,8 +51,8 @@ definition. See file headers for full copyright notices.
 ## Install
 
 ```sh
-git clone <this-repo>
-cd charge-scheduler
+git clone https://github.com/emillioc/mac-charge-scheduler.git
+cd mac-charge-scheduler
 sudo ./install.sh
 ```
 
@@ -72,6 +72,36 @@ sudo toggle-scheduler.sh  # pause the schedule (forces charging on) / resume it 
 ```
 
 Logs go to `/var/log/chargescheduler.log`.
+
+## Pause / resume the schedule
+
+`toggle-scheduler.sh` is a single on/off switch for the whole schedule,
+without uninstalling anything:
+
+```sh
+sudo toggle-scheduler.sh
+```
+
+- If the daemon is currently loaded, it unloads it and force-enables
+  charging (so a paused schedule always leaves you able to charge, not
+  stuck mid-block):
+  ```
+  ==========================================
+   SCHEDULER PAUSED - charging forced ON
+   Run this script again to resume.
+  ==========================================
+  ```
+- Run it again and it reloads the daemon, which immediately re-applies the
+  correct state for the current time:
+  ```
+  ==========================================
+   SCHEDULER RESUMED - 4pm-11pm blocking active
+   Current: [timestamp] charging is disabled
+  ==========================================
+  ```
+
+It's installed to `/usr/local/bin/toggle-scheduler.sh` by `install.sh`, so
+it's runnable from anywhere once installed.
 
 ## Changing the blocked window
 
