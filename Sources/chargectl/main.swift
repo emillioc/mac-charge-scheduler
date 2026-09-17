@@ -62,7 +62,7 @@ func cmdStatus() {
 // charge just because one scheduled event didn't run.
 func cmdAuto() {
     let hour = Calendar.current.component(.hour, from: Date())
-    let blockedWindow = 16..<21
+    let blockedWindow = 16..<23
     if blockedWindow.contains(hour) {
         cmdDisable()
     } else {
