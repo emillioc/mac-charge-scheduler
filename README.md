@@ -26,14 +26,22 @@ Apple does not document or support this key, and:
 - `chargectl` opens the `AppleSMC` IOKit service and reads/writes the
   charge-enable key directly (`Sources/chargectl/SMCComm.swift`,
   `SMCComm+Charging.swift`). Writing requires root.
-- `chargectl auto` checks the current local hour: if it falls inside the
-  blocked window, it disables charging; otherwise it enables it.
+- `chargectl auto` checks the current local hour. Outside the blocked
+  window it always enables charging. Inside the window, it applies a
+  **battery-percentage safety valve** instead of blocking unconditionally:
+  below 15% it overrides the block and charges from the grid, above 30% it
+  resumes blocking (running on battery), and in between it leaves whatever
+  state charging is already in. This keeps the battery cycling roughly
+  15-30% during peak hours instead of ever risking it running out, without
+  a separate state file — the SMC key's own current value is the hysteresis
+  memory.
 - A root `LaunchDaemon` (`com.emchandra.chargescheduler.plist`) runs
-  `chargectl auto` at the two window boundaries **and** on every daemon
-  load (`RunAtLoad`). That second part matters: if a scheduled firing is
-  missed (e.g. the Mac was asleep at 4pm), the very next load/reboot
-  re-asserts the correct state, so it can't get permanently stuck in the
-  wrong mode.
+  `chargectl auto` at the two window boundaries (4pm/11pm), every 5 minutes
+  (`StartInterval`, so the battery threshold gets checked often enough to
+  react promptly), and on every daemon load (`RunAtLoad`). That last part
+  matters: if a scheduled firing is missed (e.g. the Mac was asleep at
+  4pm), the very next load/reboot re-asserts the correct state, so it can't
+  get permanently stuck in the wrong mode.
 
 The core SMC communication code is adapted from
 [mhaeuser/Battery-Toolkit](https://github.com/mhaeuser/Battery-Toolkit)

@@ -27,46 +27,82 @@ func withSMC<T>(_ body: () -> T) -> T {
     return body()
 }
 
-func cmdEnable() {
-    withSMC {
-        guard SMCComm.Charging.enableCharging() else {
-            fail("failed to enable charging")
-        }
-        log("charging enabled")
+// These assume an SMC session is already open (called from within withSMC).
+func doEnable() {
+    guard SMCComm.Charging.enableCharging() else {
+        fail("failed to enable charging")
     }
+    log("charging enabled")
+}
+
+func doDisable() {
+    guard SMCComm.Charging.disableCharging() else {
+        fail("failed to disable charging")
+    }
+    log("charging disabled")
+}
+
+func doStatus() -> Bool {
+    guard let disabled = SMCComm.Charging.isChargingDisabled() else {
+        fail("failed to read charging state")
+    }
+    log(disabled ? "charging is disabled" : "charging is enabled")
+    return disabled
+}
+
+func cmdEnable() {
+    withSMC { doEnable() }
 }
 
 func cmdDisable() {
-    withSMC {
-        guard SMCComm.Charging.disableCharging() else {
-            fail("failed to disable charging")
-        }
-        log("charging disabled")
-    }
+    withSMC { doDisable() }
 }
 
 func cmdStatus() {
-    withSMC {
-        guard let disabled = SMCComm.Charging.isChargingDisabled() else {
-            fail("failed to read charging state")
-        }
-        log(disabled ? "charging is disabled" : "charging is enabled")
+    withSMC { _ = doStatus() }
+}
+
+// Battery-percent safety valve, only meaningful while inside the blocked
+// window. Uses the SMC key's own current state as the hysteresis memory
+// (no separate state file needed): below the low threshold, allow charging
+// from the grid; above the high threshold, go back to blocking (running on
+// battery); in between, leave whatever the current state already is.
+let lowThreshold = 15
+let highThreshold = 30
+
+func applyThreshold() {
+    guard let percent = currentBatteryPercent() else {
+        fail("failed to read battery percentage")
+    }
+
+    if percent < lowThreshold {
+        log("battery \(percent)% is below \(lowThreshold)%, overriding block to charge from grid")
+        doEnable()
+    } else if percent > highThreshold {
+        log("battery \(percent)% is above \(highThreshold)%, resuming block (running on battery)")
+        doDisable()
+    } else {
+        let disabled = doStatus()
+        log("battery \(percent)% is within the \(lowThreshold)-\(highThreshold)% band, leaving charging \(disabled ? "disabled" : "enabled")")
     }
 }
 
 // Self-healing mode: derive the desired state from the current wall-clock
 // hour instead of trusting that this specific invocation was the "right"
-// scheduled fire. Used for both the daily 4pm/9pm triggers and RunAtLoad,
-// so a missed firing (e.g. asleep at 4pm) is corrected the next time the
-// daemon starts, and the Mac can never get stuck permanently unable to
-// charge just because one scheduled event didn't run.
+// scheduled fire. Runs on the daily 4pm/11pm triggers, the periodic
+// battery-check interval, and RunAtLoad, so a missed firing (e.g. asleep at
+// 4pm) is corrected the next time the daemon starts, and the Mac can never
+// get stuck permanently unable to charge just because one scheduled event
+// didn't run.
 func cmdAuto() {
-    let hour = Calendar.current.component(.hour, from: Date())
-    let blockedWindow = 16..<23
-    if blockedWindow.contains(hour) {
-        cmdDisable()
-    } else {
-        cmdEnable()
+    withSMC {
+        let hour = Calendar.current.component(.hour, from: Date())
+        let blockedWindow = 16..<23
+        if blockedWindow.contains(hour) {
+            applyThreshold()
+        } else {
+            doEnable()
+        }
     }
 }
 
